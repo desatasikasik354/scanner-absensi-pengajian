@@ -1,0 +1,151 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scanner QR Absensi Pengajian</title>
+
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f1f8f5;
+      color: #243b35;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 450px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 15px;
+    }
+
+    h2 {
+      color: #087f5b;
+    }
+
+    button {
+      background: #087f5b;
+      color: white;
+      border: 0;
+      padding: 13px 20px;
+      border-radius: 9px;
+      font-size: 16px;
+      margin: 8px;
+    }
+
+    #reader {
+      width: 100%;
+      margin: 15px auto;
+    }
+
+    #status {
+      margin-top: 15px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h2>Scanner QR Jamaah</h2>
+    <p>Arahkan kamera ke QR Code jamaah.</p>
+
+    <div id="reader"></div>
+
+    <p id="status">Scanner belum dijalankan.</p>
+
+    <button onclick="startScanner()">Mulai Scan</button>
+    <button onclick="stopScanner()">Hentikan</button>
+  </div>
+
+  <script>
+    let scanner = null;
+    let processing = false;
+
+    async function startScanner() {
+      if (typeof Html5Qrcode === "undefined") {
+        document.getElementById("status").textContent =
+          "Library scanner gagal dimuat.";
+        return;
+      }
+
+      if (scanner) return;
+
+      if (!navigator.mediaDevices ||
+          !navigator.mediaDevices.getUserMedia) {
+        document.getElementById("status").textContent =
+          "Browser tidak mendukung akses kamera.";
+        return;
+      }
+
+      processing = false;
+      scanner = new Html5Qrcode("reader");
+
+      try {
+        await scanner.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 180 }
+          },
+          async function(decodedText) {
+            if (processing) return;
+            processing = true;
+
+            const id = decodedText.trim();
+
+            document.getElementById("status").textContent =
+              "QR terbaca: " + id;
+
+            await stopScanner();
+
+            if (window.opener && !window.opener.closed) {
+              window.opener.postMessage(
+                {
+                  type: "JAMAAH_QR_SCANNED",
+                  id: id
+                },
+                "*"
+              );
+
+              document.getElementById("status").textContent =
+                "ID berhasil dikirim ke aplikasi absensi.";
+            } else {
+              document.getElementById("status").textContent =
+                "Aplikasi absensi tidak ditemukan. Buka scanner dari aplikasi absensi.";
+            }
+          }
+        );
+
+        document.getElementById("status").textContent =
+          "Kamera aktif. Silakan scan QR.";
+
+      } catch (error) {
+        scanner = null;
+        document.getElementById("status").textContent =
+          "Kamera gagal dibuka: " + error;
+      }
+    }
+
+    async function stopScanner() {
+      if (!scanner) return;
+
+      const current = scanner;
+      scanner = null;
+
+      try {
+        await current.stop();
+        await current.clear();
+      } catch (error) {
+        console.log(error);
+      }
+    }
+  </script>
+</body>
+</html>
